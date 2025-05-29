@@ -1,0 +1,218 @@
+sequenceDiagram
+    participant F as Flutter App
+    participant SS as Secure Storage
+    participant A0 as Auth0
+    participant API as FastAPI Auth Service
+    participant DB as PostgreSQL
+    participant R as Redis Cache
+
+    Note over F, R: Complete Authentication & API Integration Flow
+
+    %% Initial App Launch
+    rect rgb(240, 248, 255)
+        Note over F, SS: App Startup & Token Check
+        F->>SS: Check for stored tokens
+        SS->>F: Return stored JWT token (if exists)
+        
+        alt Token exists
+            F->>API: GET /auth/verify with Bearer token
+            API->>A0: Validate token with JWKS
+            A0->>API: Token validation result
+            
+            alt Token valid
+                API->>F: 200 OK - Token valid
+                Note over F: Navigate to role-based dashboard
+            else Token expired/invalid
+                API->>F: 401 Unauthorized
+                Note over F: Proceed to login flow
+            end
+        else No token
+            Note over F: Show login screen
+        end
+    end
+
+    %% Login Flow
+    rect rgb(255, 248, 240)
+        Note over F, A0: OAuth2 Authentication Flow
+        F->>F: User taps "Login" button
+        F->>A0: Launch OAuth2 flow with redirect URI
+        Note over A0: Auth0 Universal Login Page
+        A0->>A0: User enters credentials
+        
+        alt Login successful
+            A0->>F: Return authorization code via deep link
+            F->>A0: Exchange code for tokens (PKCE)
+            A0->>F: Return JWT access token + refresh token
+            
+            %% Store tokens securely
+            F->>SS: Store JWT and refresh tokens
+            SS->>F: Tokens stored successfully
+        else Login failed
+            A0->>F: Error response
+            F->>F: Show error message
+            Note over F: Return to login screen
+        end
+    end
+
+    %% Get User Info
+    rect rgb(248, 255, 240)
+        Note over F, DB: Retrieve User Information & Roles
+        F->>API: GET /auth/me with Bearer token
+        API->>API: Extract token from Authorization header
+        API->>A0: Validate JWT signature with JWKS
+        A0->>API: Token validation + public key
+        
+        API->>API: Decode JWT payload and extract claims
+        Note over API: Extract user_id, email, custom claims
+        
+        %% Check cache first
+        API->>R: Check user cache (user_id key)
+        
+        alt User data cached
+            R->>API: Return cached user data
+        else No cache
+            API->>A0: GET /userinfo with access token
+            A0->>API: User profile + custom claims
+            API->>R: Cache user data (TTL: 1 hour)
+        end
+        
+        API->>API: Map Auth0 custom claims to app roles
+        Note over API: "https://yourapp.com/roles" → [customer, service_provider]
+        
+        API->>F: Return user info + roles + permissions
+        Note over F: {user_id, email, roles: [customer], permissions: [...]}
+    end
+
+    %% Role-Based UI Update
+    rect rgb(255, 240, 245)
+        Note over F: Role-Based UI Rendering
+        F->>F: Update AuthBloc state with user + roles
+        
+        alt Single role user
+            F->>F: Navigate to role-specific dashboard
+            Note over F: Customer Dashboard or Provider Dashboard
+        else Multi-role user
+            F->>F: Show role selection screen
+            F->>F: User selects active role
+            F->>F: Navigate to selected role dashboard
+        end
+        
+        F->>F: Update navigation menu based on roles
+        F->>F: Show/hide features based on permissions
+    end
+
+    %% API Requests with Token
+    rect rgb(248, 240, 255)
+        Note over F, DB: Protected API Calls
+        F->>API: GET /customer/dashboard with Bearer token
+        API->>API: Auth middleware extracts token
+        API->>R: Check token validation cache
+        
+        alt Token cached and valid
+            R->>API: Return cached validation result
+        else Token not cached
+            API->>A0: Validate token with JWKS
+            A0->>API: Validation result
+            API->>R: Cache validation (TTL: 15 minutes)
+        end
+        
+        API->>API: Extract user info from token
+        API->>API: Check user has "customer" role
+        
+        alt User has required role
+            API->>DB: Query customer-specific data
+            DB->>API: Return customer data
+            API->>F: 200 OK + customer dashboard data
+            F->>F: Update customer dashboard UI
+        else User lacks required role
+            API->>F: 403 Forbidden - Access denied
+            F->>F: Show access denied message
+        end
+    end
+
+    %% Provider API Requests
+    rect rgb(240, 255, 240)
+        Note over F, DB: Provider Protected API Calls
+        F->>API: GET /provider/services with Bearer token
+        API->>API: Auth middleware extracts token
+        API->>R: Check token validation cache
+        
+        alt Token cached and valid
+            R->>API: Return cached validation result
+        else Token not cached
+            API->>A0: Validate token with JWKS
+            A0->>API: Validation result
+            API->>R: Cache validation (TTL: 15 minutes)
+        end
+        
+        API->>API: Extract user info from token
+        API->>API: Check user has "service_provider" role
+        
+        alt User has required role
+            API->>DB: Query provider-specific data
+            DB->>API: Return provider data
+            API->>F: 200 OK + provider services data
+            F->>F: Update provider dashboard UI
+        else User lacks required role
+            API->>F: 403 Forbidden - Access denied
+            F->>F: Show access denied message
+        end
+    end
+
+    %% Token Refresh Flow
+    rect rgb(255, 255, 240)
+        Note over F, SS: Automatic Token Refresh
+        F->>API: API request with expired token
+        API->>A0: Validate expired token
+        A0->>API: 401 - Token expired
+        API->>F: 401 Unauthorized
+        
+        F->>SS: Get refresh token
+        SS->>F: Return stored refresh token
+        
+        alt Refresh token valid
+            F->>A0: POST /oauth/token with refresh_token
+            A0->>F: New access token + refresh token
+            F->>SS: Update stored tokens
+            F->>API: Retry original request with new token
+            API->>F: Success response
+        else Refresh token invalid
+            F->>F: Clear stored tokens
+            F->>F: Redirect to login screen
+        end
+    end
+
+    %% Logout Flow
+    rect rgb(255, 240, 240)
+        Note over F, A0: Logout Process
+        F->>F: User taps logout
+        F->>SS: Clear stored tokens
+        SS->>F: Tokens cleared
+        F->>A0: POST /v2/logout (optional - clear Auth0 session)
+        A0->>F: Logout confirmation
+        F->>F: Navigate to login screen
+        F->>F: Clear all user state
+    end
+
+    %% Error Handling
+    rect rgb(255, 248, 248)
+        Note over F, API: Error Scenarios
+        
+        alt Network error
+            F->>API: API request fails
+            API--xF: Network timeout/error
+            F->>F: Show retry option or cached data
+        end
+        
+        alt Auth0 service down
+            F->>A0: Token validation request
+            A0--xF: Service unavailable
+            F->>F: Show "Authentication service unavailable"
+        end
+        
+        alt Invalid token format
+            F->>API: Request with malformed token
+            API->>F: 400 Bad Request - Invalid token format
+            F->>F: Clear tokens and redirect to login
+        end
+    end
