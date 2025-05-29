@@ -1,0 +1,34 @@
+[virtualenvs]
+# Create virtual environments in the project directory
+in-project = true
+
+# Use the system's Python interpreter when creating virtual environments
+prefer-active-python = true
+
+# Path where virtual environments are created (relative to project root)
+path = ".venv"
+
+# Prompt format for virtual environment activation
+prompt = "{project_name}-py{python_version}"
+
+[installer]
+# Use parallel installation for faster dependency resolution
+parallel = true
+
+# Maximum number of workers for parallel installation
+max-workers = 10
+
+[solver]
+# Use the new dependency resolver (recommended)
+lazy-wheel = true
+
+[experimental]
+# Enable new installer (faster and more reliable)
+new-installer = true
+
+# Enable system-git for git dependencies
+system-git = false
+
+[cache]
+# Cache directory for downloaded packages
+# cache-dir = "~/.cache/pypoetry" 
