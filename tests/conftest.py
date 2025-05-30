@@ -120,12 +120,38 @@ def mock_jwt_verifier():
 
 
 @pytest.fixture
-def mock_auth0_client():
+def mock_auth0_client(test_user_data): # Added test_user_data
     """Mock Auth0 client for testing."""
     with patch("app.core.auth.auth0_client.Auth0Client") as mock:
-        client = AsyncMock()
-        mock.return_value = client
-        yield client
+        client_instance = AsyncMock()
+
+        # Mock for get_user_info method
+        mock_get_user_info = AsyncMock(return_value=test_user_data.copy())
+        client_instance.get_user_info = mock_get_user_info
+
+        # Mock for get_public_key method
+        # Sample JWKS structure. In a real scenario, 'n' and 'e' would be valid RSA public key components.
+        sample_jwks = {
+            "keys": [
+                {
+                    "alg": "RS256",
+                    "kty": "RSA",
+                    "use": "sig",
+                    "kid": "testkey-rs256",
+                    "n": "some-modulus-value-n", # In real JWKS, this is a Base64URLUInt-encoded value
+                    "e": "AQAB", # In real JWKS, this is a Base64URLUInt-encoded value (exponent)
+                }
+            ]
+        }
+        mock_get_public_key = AsyncMock(return_value=sample_jwks)
+        client_instance.get_public_key = mock_get_public_key
+
+        # Mock for get_user_by_id method
+        mock_get_user_by_id = AsyncMock(return_value=test_user_data.copy())
+        client_instance.get_user_by_id = mock_get_user_by_id
+
+        mock.return_value = client_instance
+        yield client_instance
 
 
 @pytest.fixture
@@ -199,6 +225,66 @@ def create_test_token():
 def auth_headers(create_test_token, test_user_data):
     """Create authorization headers with valid token."""
     token = create_test_token(test_user_data)
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture
+def expired_auth_headers(create_test_token, test_user_data):
+    """Create authorization headers with an expired token."""
+    token = create_test_token(test_user_data, expires_delta=timedelta(seconds=-3600))
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture
+def invalid_signature_auth_headers(create_test_token, test_user_data):
+    """Create authorization headers with a token signed with a wrong secret key."""
+    token = create_test_token(test_user_data, secret_key="wrong-secret-key")
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture
+def invalid_issuer_auth_headers(create_test_token, test_user_data):
+    """Create authorization headers with a token having an invalid issuer."""
+    # The create_test_token normally uses "https://test.auth0.com/"
+    # To make it invalid, we need to modify the payload directly after creation,
+    # or modify create_test_token to accept an issuer.
+    # For simplicity here, let's assume create_test_token can be temporarily adjusted
+    # or we craft a token with a different issuer.
+    # A more robust way would be to allow create_test_token to take issuer as a parameter.
+    # For now, we'll encode it with a bad issuer by overriding the 'iss' in user_data for the token creation.
+
+    custom_user_data = test_user_data.copy()
+    # The 'iss' is added inside create_test_token, so we need to modify it there.
+    # Let's make a small helper within this fixture for clarity or accept an 'iss' in `create_test_token`.
+    # Re-defining a minimal version of create_test_token logic here for custom 'iss'
+
+    payload = {
+        **test_user_data,
+        "exp": datetime.now(timezone.utc) + timedelta(hours=1),
+        "iat": datetime.now(timezone.utc),
+        "iss": "https://invalid.auth0.com/", # Invalid issuer
+        "aud": "https://test-api.example.com",
+    }
+    token = jwt.encode(payload, "test-secret", algorithm="HS256")
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture
+def insufficient_permissions_auth_headers(create_test_token, test_user_data):
+    """Create authorization headers with a token having insufficient permissions."""
+    user_data_insufficient_perms = test_user_data.copy()
+    user_data_insufficient_perms["permissions"] = ["read:nothing_important"]
+    token = create_test_token(user_data_insufficient_perms)
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture
+def missing_roles_auth_headers(create_test_token, test_user_data):
+    """Create authorization headers with a token missing roles."""
+    user_data_no_roles = test_user_data.copy()
+    user_data_no_roles.pop("roles", None) # Remove roles key
+    # Alternatively, set roles to empty list: user_data_no_roles["roles"] = []
+    token = create_test_token(user_data_no_roles)
     return {"Authorization": f"Bearer {token}"}
 
 
