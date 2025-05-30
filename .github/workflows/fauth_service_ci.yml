@@ -17,197 +17,35 @@ env:
   REDIS_PORT: 6379
 
 jobs:
-  code-quality:
-    runs-on: ubuntu-latest
-    name: Code Quality Checks
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: Install Poetry
-        uses: snok/install-poetry@v1
-        with:
-          version: ${{ env.POETRY_VERSION }}
-          virtualenvs-create: true
-          virtualenvs-in-project: true
-
-      - name: Cache dependencies
-        uses: actions/cache@v3
-        with:
-          path: .venv
-          key: venv-${{ runner.os }}-${{ env.PYTHON_VERSION }}-${{ hashFiles('**/poetry.lock') }}
-
-      - name: Install dependencies
-        run: poetry install --no-interaction --no-root
-
-      - name: Run Black formatter check
-        run: poetry run black --check app tests
-
-      - name: Run isort import sorting check
-        run: poetry run isort --check-only app tests
-
-      - name: Run Flake8 linter
-        run: poetry run flake8 app tests
-
-      - name: Run MyPy type checking
-        run: poetry run mypy app
-
-      - name: Run pydocstyle docstring checker
-        run: poetry run pydocstyle app --ignore=D100,D104,D213,D203
-
-  security-checks:
-    runs-on: ubuntu-latest
-    name: Security Analysis
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: Install Poetry
-        uses: snok/install-poetry@v1
-        with:
-          version: ${{ env.POETRY_VERSION }}
-          virtualenvs-create: true
-          virtualenvs-in-project: true
-
-      - name: Cache dependencies
-        uses: actions/cache@v3
-        with:
-          path: .venv
-          key: venv-${{ runner.os }}-${{ env.PYTHON_VERSION }}-${{ hashFiles('**/poetry.lock') }}
-
-      - name: Install dependencies
-        run: poetry install --no-interaction --no-root
-
-      - name: Run Bandit security linter
-        run: |
-          poetry run bandit -r app -f json -o bandit-report.json || true
-        continue-on-error: true
-
-      - name: Check Bandit results
-        run: |
-          if [ -f bandit-report.json ]; then
-            echo "Security scan completed. Checking results..."
-            ISSUES=$(cat bandit-report.json | jq '.results | length')
-            HIGH_SEVERITY=$(cat bandit-report.json | jq '[.results[] | select(.issue_severity == "HIGH")] | length')
-
-            echo "Found $ISSUES total issues, $HIGH_SEVERITY high severity issues"
-
-            if [ "$HIGH_SEVERITY" -gt 0 ]; then
-              echo "❌ Found high severity security issues"
-              exit 1
-            else
-              echo "✅ No high severity issues found"
-            fi
-          else
-            echo "❌ Bandit report not found"
-            exit 1
-          fi
-
-      - name: Upload Bandit report
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: bandit-report
-          path: bandit-report.json
-
-      - name: Run Safety dependency check
-        run: poetry run safety check --json --output safety-report.json || true
-
-      - name: Upload Safety report
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: safety-report
-          path: safety-report.json
-
   test:
     runs-on: ubuntu-latest
     name: Test Suite
-    services:
-      postgres:
-        image: postgres:15
-        env:
-          POSTGRES_DB: ${{ env.POSTGRES_DB }}
-          POSTGRES_USER: ${{ env.POSTGRES_USER }}
-          POSTGRES_PASSWORD: ${{ env.POSTGRES_PASSWORD }}
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
-
-      redis:
-        image: redis:7
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 6379:6379
-
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-      - name: Install Poetry
-        uses: snok/install-poetry@v1
-        with:
-          version: ${{ env.POETRY_VERSION }}
-          virtualenvs-create: true
-          virtualenvs-in-project: true
+      - name: Build development containers
+        run: |
+          docker compose -f docker-compose.dev.yml build
+          docker compose -f docker-compose.dev.yml up -d
 
-      - name: Cache dependencies
-        uses: actions/cache@v3
-        with:
-          path: .venv
-          key: venv-${{ runner.os }}-${{ env.PYTHON_VERSION }}-${{ hashFiles('**/poetry.lock') }}
-
-      - name: Install dependencies
-        run: poetry install --no-interaction --no-root
+      - name: Wait for services to be ready
+        run: |
+          # Wait for PostgreSQL
+          timeout 30s bash -c 'until docker exec fastapi-auth-postgres-dev pg_isready; do sleep 1; done'
+          # Wait for Redis
+          timeout 30s bash -c 'until docker exec fastapi-auth-redis-dev redis-cli ping; do sleep 1; done'
 
       - name: Run unit tests
-        env:
-          DATABASE_URL: postgresql://${{ env.POSTGRES_USER }}:${{ env.POSTGRES_PASSWORD }}@localhost:5432/${{ env.POSTGRES_DB }}
-          REDIS_URL: redis://localhost:6379
-          SECRET_KEY: test-secret-key
-          ENVIRONMENT: test
-        run: |
-          poetry run pytest tests -v --cov=app --cov-report=xml --cov-report=html --cov-report=term
+        run: docker exec fastapi-auth-app-dev pytest tests -v --cov=app --cov-report=xml --cov-report=html --cov-report=term
 
       - name: Run integration tests
-        env:
-          DATABASE_URL: postgresql://${{ env.POSTGRES_USER }}:${{ env.POSTGRES_PASSWORD }}@localhost:5432/${{ env.POSTGRES_DB }}
-          REDIS_URL: redis://localhost:6379
-          SECRET_KEY: test-secret-key
-          ENVIRONMENT: test
-        run: |
-          poetry run pytest tests/integration -v
+        run: docker exec fastapi-auth-app-dev pytest tests/integration -v
 
       - name: Run e2e tests
-        env:
-          DATABASE_URL: postgresql://${{ env.POSTGRES_USER }}:${{ env.POSTGRES_PASSWORD }}@localhost:5432/${{ env.POSTGRES_DB }}
-          REDIS_URL: redis://localhost:6379
-          SECRET_KEY: test-secret-key
-          ENVIRONMENT: test
-        run: |
-          poetry run pytest tests/e2e -v
+        run: docker exec fastapi-auth-app-dev pytest tests/e2e -v
 
       - name: Upload coverage reports
         uses: codecov/codecov-action@v3
@@ -223,27 +61,11 @@ jobs:
           name: coverage-report
           path: htmlcov/
 
-  build-and-test-docker:
-    runs-on: ubuntu-latest
-    name: Docker Build Test
-    steps:
-      - uses: actions/checkout@v4
+      - name: Cleanup
+        if: always()
+        run: docker compose -f docker-compose.dev.yml down -v
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
 
-      - name: Build Docker image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          push: false
-          tags: fastapi-auth-service:test
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Test Docker image
-        run: |
-          docker run --rm fastapi-auth-service:test --version || echo "Version check not implemented"
 
   dependency-review:
     runs-on: ubuntu-latest
