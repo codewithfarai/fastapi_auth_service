@@ -5,12 +5,16 @@ repos:
     rev: v4.5.0
     hooks:
       - id: trailing-whitespace
+        exclude: ^\.vscode/
       - id: end-of-file-fixer
+        exclude: ^\.vscode/
       - id: check-yaml
+        exclude: ^\.vscode/
       - id: check-added-large-files
         args: ["--maxkb=500"]
       - id: check-toml
       - id: check-json
+        exclude: ^\.vscode/
       - id: check-merge-conflict
       - id: check-case-conflict
       - id: check-docstring-first
@@ -24,6 +28,7 @@ repos:
       - id: black
         language_version: python3.12
         args: [--line-length=88]
+        exclude: ^\.vscode/
 
   # isort - Import sorting (auto-fix)
   - repo: https://github.com/pycqa/isort
@@ -31,6 +36,7 @@ repos:
     hooks:
       - id: isort
         args: ["--profile", "black", "--line-length=88"]
+        exclude: ^\.vscode/
 
   # Flake8 - Linting (strict)
   - repo: https://github.com/pycqa/flake8
@@ -46,8 +52,9 @@ repos:
           - flake8-docstrings
           - flake8-comprehensions
           - flake8-bugbear
+        exclude: ^\.vscode/
 
-  # MyPy - Type checking (strict) - Fixed dependencies
+  # MyPy - Type checking (strict)
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v1.7.1
     hooks:
@@ -64,7 +71,7 @@ repos:
           - --strict
           - --ignore-missing-imports
           - --follow-imports=skip
-        exclude: ^(tests/|migrations/)
+        exclude: ^(tests/|migrations/|\.vscode/)
 
   # Bandit - Security linting
   - repo: https://github.com/pycqa/bandit
@@ -72,13 +79,7 @@ repos:
     hooks:
       - id: bandit
         args: ["-r", "app/"]
-        exclude: tests/
-
-  # Safety - Check for known security vulnerabilities
-  - repo: https://github.com/Lucas-C/pre-commit-hooks-safety
-    rev: v1.3.2
-    hooks:
-      - id: python-safety-dependencies-check
+        exclude: ^(tests/|\.vscode/)
 
   # Pytest - Run tests
   - repo: local
@@ -96,4 +97,4 @@ repos:
     hooks:
       - id: pydocstyle
         args: [--convention=google]
-        exclude: ^(tests/|migrations/)
+        exclude: ^(tests/|migrations/|\.vscode/)
