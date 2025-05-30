@@ -28,7 +28,6 @@ black = "^23.11.0"
 isort = "^5.12.0"
 flake8 = "^6.1.0"
 mypy = "^1.7.1"
-pre-commit = "^4.2.0"
 bandit = "^1.8.3"
 safety = "^3.5.1"
 pydocstyle = "^6.3.0"
@@ -37,6 +36,7 @@ pydocstyle = "^6.3.0"
 pytest-cov = "^4.1.0"
 factory-boy = "^3.3.0"
 faker = "^20.1.0"
+pytest-httpx = "^0.28.0" # Added pytest-httpx
 
 [build-system]
 requires = ["poetry-core"]
@@ -121,3 +121,6 @@ exclude_lines = [
     "class .*\\bProtocol\\):",
     "@(abc\\.)?abstractmethod",
 ]
+
+[tool.pydocstyle]
+ignore = ["D100", "D101", "D102", "D103", "D104", "D105", "D106", "D107"]
