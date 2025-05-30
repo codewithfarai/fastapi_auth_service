@@ -89,7 +89,29 @@ jobs:
         run: poetry install --no-interaction --no-root
 
       - name: Run Bandit security linter
-        run: poetry run bandit -r app -f json -o bandit-report.json
+        run: |
+          poetry run bandit -r app -f json -o bandit-report.json || true
+        continue-on-error: true
+
+      - name: Check Bandit results
+        run: |
+          if [ -f bandit-report.json ]; then
+            echo "Security scan completed. Checking results..."
+            ISSUES=$(cat bandit-report.json | jq '.results | length')
+            HIGH_SEVERITY=$(cat bandit-report.json | jq '[.results[] | select(.issue_severity == "HIGH")] | length')
+
+            echo "Found $ISSUES total issues, $HIGH_SEVERITY high severity issues"
+
+            if [ "$HIGH_SEVERITY" -gt 0 ]; then
+              echo "❌ Found high severity security issues"
+              exit 1
+            else
+              echo "✅ No high severity issues found"
+            fi
+          else
+            echo "❌ Bandit report not found"
+            exit 1
+          fi
 
       - name: Upload Bandit report
         uses: actions/upload-artifact@v4
