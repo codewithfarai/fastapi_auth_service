@@ -31,4 +31,4 @@ system-git = false
 
 [cache]
 # Cache directory for downloaded packages
-# cache-dir = "~/.cache/pypoetry" 
+# cache-dir = "~/.cache/pypoetry"
