@@ -13,12 +13,12 @@ sequenceDiagram
         Note over F, SS: App Startup & Token Check
         F->>SS: Check for stored tokens
         SS->>F: Return stored JWT token (if exists)
-        
+
         alt Token exists
             F->>API: GET /auth/verify with Bearer token
             API->>A0: Validate token with JWKS
             A0->>API: Token validation result
-            
+
             alt Token valid
                 API->>F: 200 OK - Token valid
                 Note over F: Navigate to role-based dashboard
@@ -38,12 +38,12 @@ sequenceDiagram
         F->>A0: Launch OAuth2 flow with redirect URI
         Note over A0: Auth0 Universal Login Page
         A0->>A0: User enters credentials
-        
+
         alt Login successful
             A0->>F: Return authorization code via deep link
             F->>A0: Exchange code for tokens (PKCE)
             A0->>F: Return JWT access token + refresh token
-            
+
             %% Store tokens securely
             F->>SS: Store JWT and refresh tokens
             SS->>F: Tokens stored successfully
@@ -61,13 +61,13 @@ sequenceDiagram
         API->>API: Extract token from Authorization header
         API->>A0: Validate JWT signature with JWKS
         A0->>API: Token validation + public key
-        
+
         API->>API: Decode JWT payload and extract claims
         Note over API: Extract user_id, email, custom claims
-        
+
         %% Check cache first
         API->>R: Check user cache (user_id key)
-        
+
         alt User data cached
             R->>API: Return cached user data
         else No cache
@@ -75,10 +75,10 @@ sequenceDiagram
             A0->>API: User profile + custom claims
             API->>R: Cache user data (TTL: 1 hour)
         end
-        
+
         API->>API: Map Auth0 custom claims to app roles
         Note over API: "https://yourapp.com/roles" → [customer, service_provider]
-        
+
         API->>F: Return user info + roles + permissions
         Note over F: {user_id, email, roles: [customer], permissions: [...]}
     end
@@ -87,7 +87,7 @@ sequenceDiagram
     rect rgb(255, 240, 245)
         Note over F: Role-Based UI Rendering
         F->>F: Update AuthBloc state with user + roles
-        
+
         alt Single role user
             F->>F: Navigate to role-specific dashboard
             Note over F: Customer Dashboard or Provider Dashboard
@@ -96,7 +96,7 @@ sequenceDiagram
             F->>F: User selects active role
             F->>F: Navigate to selected role dashboard
         end
-        
+
         F->>F: Update navigation menu based on roles
         F->>F: Show/hide features based on permissions
     end
@@ -107,7 +107,7 @@ sequenceDiagram
         F->>API: GET /customer/dashboard with Bearer token
         API->>API: Auth middleware extracts token
         API->>R: Check token validation cache
-        
+
         alt Token cached and valid
             R->>API: Return cached validation result
         else Token not cached
@@ -115,10 +115,10 @@ sequenceDiagram
             A0->>API: Validation result
             API->>R: Cache validation (TTL: 15 minutes)
         end
-        
+
         API->>API: Extract user info from token
         API->>API: Check user has "customer" role
-        
+
         alt User has required role
             API->>DB: Query customer-specific data
             DB->>API: Return customer data
@@ -136,7 +136,7 @@ sequenceDiagram
         F->>API: GET /provider/services with Bearer token
         API->>API: Auth middleware extracts token
         API->>R: Check token validation cache
-        
+
         alt Token cached and valid
             R->>API: Return cached validation result
         else Token not cached
@@ -144,10 +144,10 @@ sequenceDiagram
             A0->>API: Validation result
             API->>R: Cache validation (TTL: 15 minutes)
         end
-        
+
         API->>API: Extract user info from token
         API->>API: Check user has "service_provider" role
-        
+
         alt User has required role
             API->>DB: Query provider-specific data
             DB->>API: Return provider data
@@ -166,10 +166,10 @@ sequenceDiagram
         API->>A0: Validate expired token
         A0->>API: 401 - Token expired
         API->>F: 401 Unauthorized
-        
+
         F->>SS: Get refresh token
         SS->>F: Return stored refresh token
-        
+
         alt Refresh token valid
             F->>A0: POST /oauth/token with refresh_token
             A0->>F: New access token + refresh token
@@ -197,19 +197,19 @@ sequenceDiagram
     %% Error Handling
     rect rgb(255, 248, 248)
         Note over F, API: Error Scenarios
-        
+
         alt Network error
             F->>API: API request fails
             API--xF: Network timeout/error
             F->>F: Show retry option or cached data
         end
-        
+
         alt Auth0 service down
             F->>A0: Token validation request
             A0--xF: Service unavailable
             F->>F: Show "Authentication service unavailable"
         end
-        
+
         alt Invalid token format
             F->>API: Request with malformed token
             API->>F: 400 Bad Request - Invalid token format

@@ -9,8 +9,9 @@ __version__ = "1.0.0"
 __author__ = "Farai Wande"
 __email__ = "faraiwande@gmail.com"
 
+from .config import settings
+
 # Package imports
 from .main import app
-from .config import settings
 
 __all__ = ["app", "settings"]

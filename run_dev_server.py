@@ -3,10 +3,11 @@
 Development server runner with enhanced logging
 """
 
-import uvicorn
-import sys
 import os
+import sys
 from pathlib import Path
+
+import uvicorn
 
 # Add app directory to Python path
 sys.path.insert(0, str(Path(__file__).parent))
@@ -31,7 +32,7 @@ def main():
     print("=" * 50)
     print("Press CTRL+C to stop the server")
     print()
-    
+
     # Configure uvicorn
     config = {
         "app": "app.main:app",
@@ -40,9 +41,9 @@ def main():
         "reload": settings.environment == "development",
         "log_level": "debug" if settings.debug else "info",
         "access_log": True,
-        "reload_dirs": ["app"] if settings.environment == "development" else None
+        "reload_dirs": ["app"] if settings.environment == "development" else None,
     }
-    
+
     # Start server
     uvicorn.run(**config)
 
