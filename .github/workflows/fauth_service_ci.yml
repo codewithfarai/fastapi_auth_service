@@ -2,10 +2,10 @@ name: CI Pipeline
 
 on:
   push:
-    branches: [ main, develop ]
+    # branches: [ main, develop ]
   pull_request:
-    branches: [ main, develop ]
-    types: [ opened, synchronize, reopened ]
+    # branches: [ main, develop ]
+    # types: [ opened, synchronize, reopened ]
 
 env:
   PYTHON_VERSION: '3.12'
