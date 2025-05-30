@@ -75,8 +75,10 @@ RUN apt-get update \
 # Copy virtual environment from production-deps stage
 COPY --from=production-deps $PYSETUP_PATH $PYSETUP_PATH
 
-# Create non-root user
-RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
+# Create non-root user and app directory
+RUN mkdir /app && \
+    useradd -m -u 1000 appuser && \
+    chown -R appuser:appuser /app
 
 # Set working directory
 WORKDIR /app

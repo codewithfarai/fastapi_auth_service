@@ -1,3 +1,5 @@
+[![CI Pipeline Status](https://github.com/project-owner/auth-service/actions/workflows/fauth_service_ci.yml/badge.svg)](https://github.com/project-owner/auth-service/actions/workflows/fauth_service_ci.yml)
+
 # FastAPI Authentication Service
 
 A production-ready authentication service with Auth0 integration, role-based access control, and async support.
@@ -299,3 +301,37 @@ DATABASE_URL=postgresql://user:pass@localhost/dbname
 ## License
 
 [Your License Here]
+
+
+## Branch Protection Rules
+
+To ensure repository stability and code quality, the following branch protection rules should be configured in the GitHub repository settings for the `main` and `develop` branches:
+
+1.  **Require a pull request before merging:**
+    *   Enable "Require a pull request before merging".
+    *   Enable "Require approvals" (set to at least 1).
+    *   Optional: Enable "Dismiss stale pull request approvals when new commits are pushed".
+    *   Optional: Enable "Require review from Code Owners".
+
+2.  **Require status checks to pass before merging:**
+    *   Enable "Require status checks to pass before merging".
+    *   Enable "Require branches to be up to date before merging".
+    *   Select the following status checks (ensure these names match the job names in your GitHub Actions workflows):
+        *   From CI Pipeline (`.github/workflows/fauth_service_ci.yml`):
+            *   `Lint, Format, Type Check` (or the exact name of your lint/format/type job)
+            *   `Test Suite` (or the exact name of your test job)
+            *   `Dependency Review`
+        *   From Security Scan (`.github/workflows/fauth_service_security_scan.yml`):
+            *   `CodeQL Analysis` (or the exact name of your CodeQL job, e.g., `codeql-analysis`)
+            *   `Snyk Vulnerability Scan` (or the exact name of your Snyk job)
+
+3.  **Require signed commits (Optional but Recommended):**
+    *   Enable "Require signed commits".
+
+4.  **Include administrators:**
+    *   Enforce these rules for administrators as well.
+
+5.  **Restrict who can push to matching branches (Recommended):**
+    *   Enable this and specify teams or people allowed to push (often, direct pushes are disallowed entirely in favor of PRs).
+
+These rules help maintain a high quality bar for code merged into critical branches.

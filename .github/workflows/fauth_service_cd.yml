@@ -1,0 +1,122 @@
+name: Continuous Deployment
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  workflow_dispatch: # Allows manual triggering
+
+permissions:
+  contents: read
+  packages: write # Needed if pushing to GitHub Container Registry (GHCR)
+  deployments: write # Needed if using GitHub Environments to track deployments
+
+jobs:
+  deploy-staging:
+    if: github.ref == 'refs/heads/develop' # Only run on pushes to develop branch
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    environment:
+      name: staging
+      # url: https://staging.your-app.com # Optional: URL for the staging environment
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub # Or your container registry
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }} # Ensure DOCKER_HUB_USERNAME secret is set
+          password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }} # Ensure DOCKER_HUB_ACCESS_TOKEN secret is set
+
+      - name: Build and push Docker image to staging
+        id: build-and-push-staging
+        run: |
+          IMAGE_TAG="staging-${{ github.sha }}"
+          # Replace 'your-dockerhub-username/your-app-name' with your actual image name
+          IMAGE_NAME="your-dockerhub-username/your-app-name"
+
+          echo "Building image ${IMAGE_NAME}:${IMAGE_TAG}"
+          docker build -t "${IMAGE_NAME}:${IMAGE_TAG}" .
+
+          echo "Pushing image ${IMAGE_NAME}:${IMAGE_TAG}"
+          docker push "${IMAGE_NAME}:${IMAGE_TAG}"
+
+          echo "image_name=${IMAGE_NAME}" >> $GITHUB_OUTPUT
+          echo "image_tag=${IMAGE_TAG}" >> $GITHUB_OUTPUT
+
+      - name: Deploy to Staging Environment
+        run: |
+          echo "Deploying image ${{ steps.build-and-push-staging.outputs.image_name }}:${{ steps.build-and-push-staging.outputs.image_tag }} to staging environment..."
+          echo "This step would typically involve running Ansible playbooks, kubectl apply, serverless deploy, or other deployment scripts."
+          # Example:
+          # ansible-playbook deployment/ansible/playbooks/deploy_stack.yml \
+          #   --extra-vars "image_tag=${{ steps.build-and-push-staging.outputs.image_tag }} env=staging"
+
+  deploy-production:
+    # Run on pushes to the main branch OR when manually dispatched
+    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      # url: https://your-app.com # Optional: URL for the production environment
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub # Or your container registry
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }} # Ensure DOCKER_HUB_USERNAME secret is set
+          password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }} # Ensure DOCKER_HUB_ACCESS_TOKEN secret is set
+
+      - name: Build and push Docker image to production
+        id: build-and-push-production
+        run: |
+          IMAGE_TAG="prod-${{ github.sha }}"
+          # Replace 'your-dockerhub-username/your-app-name' with your actual image name
+          IMAGE_NAME="your-dockerhub-username/your-app-name"
+
+          echo "Building image ${IMAGE_NAME}:${IMAGE_TAG}"
+          docker build -t "${IMAGE_NAME}:${IMAGE_TAG}" .
+
+          echo "Pushing image ${IMAGE_NAME}:${IMAGE_TAG}"
+          docker push "${IMAGE_NAME}:${IMAGE_TAG}"
+
+          echo "image_name=${IMAGE_NAME}" >> $GITHUB_OUTPUT
+          echo "image_tag=${IMAGE_TAG}" >> $GITHUB_OUTPUT
+
+      - name: Deploy to Production Environment
+        run: |
+          echo "Deploying image ${{ steps.build-and-push-production.outputs.image_name }}:${{ steps.build-and-push-production.outputs.image_tag }} to production environment..."
+          echo "This step requires careful implementation with appropriate safeguards, configuration management, and potentially manual approval steps for production."
+          # Example:
+          # ansible-playbook deployment/ansible/playbooks/deploy_stack.yml \
+          #   --extra-vars "image_tag=${{ steps.build-and-push-production.outputs.image_tag }} env=production"
+
+  notify-cd-workflow-failure:
+    name: Notify CD Workflow Failure
+    runs-on: ubuntu-latest
+    if: failure() # This job runs if any job in the CD workflow fails
+    # No 'needs' here, it will run if the workflow status is failure.
+    steps:
+      - name: Send CD Slack Notification on Failure
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_COLOR: 'danger'
+          SLACK_TITLE: 'CD Pipeline Failed :x:'
+          SLACK_MESSAGE: |
+            Workflow: `${{ github.workflow }}`
+            Branch: `${{ github.ref_name }}` (Note: may not be accurate if manually dispatched for a specific commit not on a branch head)
+            Event: `${{ github.event_name }}`
+            Actor: `${{ github.actor }}`
+            Run: <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Run>

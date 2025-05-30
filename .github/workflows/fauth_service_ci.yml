@@ -1,0 +1,254 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+    types: [ opened, synchronize, reopened ]
+
+env:
+  PYTHON_VERSION: '3.12'
+  POETRY_VERSION: '1.7.1'
+  POSTGRES_DB: auth_db
+  POSTGRES_USER: auth_user
+  POSTGRES_PASSWORD: auth_password
+  REDIS_HOST: localhost
+  REDIS_PORT: 6379
+
+jobs:
+  lint-format-type:
+    runs-on: ubuntu-latest
+    name: Lint, Format, Type Check
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build development containers
+        run: |
+          docker compose -f docker-compose.dev.yml build
+          docker compose -f docker-compose.dev.yml up -d
+
+      - name: Debug - Show running containers
+        run: |
+          echo "=== Docker Compose PS (lint-format-type) ==="
+          docker compose -f docker-compose.dev.yml ps
+          echo "=== Docker PS (lint-format-type) ==="
+          docker ps -a
+          echo "=== App Logs (lint-format-type) ==="
+          # It's good to check logs early if app fails to start
+          docker logs fastapi-auth-app-dev || echo "App container not running or no logs yet."
+
+
+      - name: Wait for PostgreSQL (lint-format-type)
+        timeout-minutes: 1
+        run: |
+          until docker exec fastapi-auth-postgres-dev pg_isready -U auth_user -d auth_db; do
+            echo "Waiting for PostgreSQL to be ready (lint-format-type)..."
+            docker logs fastapi-auth-postgres-dev || echo "Postgres container not running or no logs yet."
+            sleep 2
+          done
+          echo "PostgreSQL is ready (lint-format-type)."
+
+      - name: Wait for Redis (lint-format-type)
+        timeout-minutes: 1
+        run: |
+          until docker exec fastapi-auth-redis-dev redis-cli ping | grep -q PONG; do
+            echo "Waiting for Redis to be ready (lint-format-type)..."
+            docker logs fastapi-auth-redis-dev || echo "Redis container not running or no logs yet."
+            sleep 2
+          done
+          echo "Redis is ready (lint-format-type)."
+
+      - name: Wait for application container (fastapi-auth-app-dev) to be healthy
+        timeout-minutes: 3
+        run: |
+          echo "Waiting for application container (fastapi-auth-app-dev) to report healthy..."
+          for i in $(seq 1 36); do # Check every 5 seconds for up to 3 minutes
+            HEALTH_STATUS=$(docker inspect --format="{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}" fastapi-auth-app-dev 2>/dev/null || echo "error_inspecting")
+
+            if [ "$HEALTH_STATUS" = "healthy" ]; then
+              echo "Application container (fastapi-auth-app-dev) is healthy."
+              break
+            fi
+
+            if [ -z "$(docker inspect --format='{{.State.Health}}' fastapi-auth-app-dev 2>/dev/null)" ] && [ "$HEALTH_STATUS" = "running" ]; then
+               echo "Application container (fastapi-auth-app-dev) is running (no healthcheck configured or healthcheck passed). Assuming ready."
+               sleep 5 # Brief pause for safety
+               break
+            fi
+
+            echo "Application container (fastapi-auth-app-dev) not healthy/running. Status: $HEALTH_STATUS. Attempt $i/36."
+            docker logs fastapi-auth-app-dev --tail 30 || echo "Could not retrieve logs from fastapi-auth-app-dev."
+            sleep 5
+          done
+
+          FINAL_HEALTH_STATUS=$(docker inspect --format="{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}" fastapi-auth-app-dev 2>/dev/null)
+          if ! ( [ "$FINAL_HEALTH_STATUS" = "healthy" ] || \
+                 ( [ -z "$(docker inspect --format='{{.State.Health}}' fastapi-auth-app-dev 2>/dev/null)" ] && [ "$FINAL_HEALTH_STATUS" = "running" ] )); then
+            echo "::error::Application container (fastapi-auth-app-dev) did not become healthy/running in time. Final status: $FINAL_HEALTH_STATUS"
+            docker ps -a
+            exit 1
+          fi
+          echo "Proceeding with application container (fastapi-auth-app-dev)."
+
+      - name: Install dependencies (lint-format-type)
+        run: docker exec fastapi-auth-app-dev poetry install --no-interaction --no-root --sync
+
+      - name: Run Ruff Linter
+        run: docker exec fastapi-auth-app-dev poetry run ruff check .
+
+      - name: Run Ruff Formatter Check
+        run: docker exec fastapi-auth-app-dev poetry run ruff format --check .
+
+      - name: Run MyPy Type Checker
+        run: docker exec fastapi-auth-app-dev poetry run mypy .
+
+      - name: Cleanup (lint-format-type)
+        if: always()
+        run: |
+          echo "=== Final container status (lint-format-type) ==="
+          docker compose -f docker-compose.dev.yml ps
+          if [[ "${{ job.status }}" == "failure" ]]; then
+            echo "::group::Dumping logs from fastapi-auth-app-dev (lint-format-type job)"
+            docker logs fastapi-auth-app-dev || echo "Could not retrieve app logs."
+            echo "::endgroup::"
+          fi
+          docker compose -f docker-compose.dev.yml down -v --remove-orphans
+
+  test:
+    runs-on: ubuntu-latest
+    name: Test Suite
+    needs: lint-format-type # Added dependency
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build development containers
+        run: |
+          docker compose -f docker-compose.dev.yml build
+          docker compose -f docker-compose.dev.yml up -d
+
+      - name: Debug - Show running containers
+        run: |
+          echo "=== Docker Compose PS (test) ==="
+          docker compose -f docker-compose.dev.yml ps
+          echo "=== Docker PS (test) ==="
+          docker ps -a
+          echo "=== PostgreSQL Logs (test) ==="
+          docker logs fastapi-auth-postgres-dev || echo "Postgres container not running or no logs yet."
+          echo "=== Redis Logs (test) ==="
+          docker logs fastapi-auth-redis-dev || echo "Redis container not running or no logs yet."
+          echo "=== App Logs (test) ==="
+          docker logs fastapi-auth-app-dev || echo "App container not running or no logs yet."
+
+
+      - name: Wait for PostgreSQL (test)
+        timeout-minutes: 1
+        run: |
+          until docker exec fastapi-auth-postgres-dev pg_isready -U auth_user -d auth_db; do
+            echo "Waiting for PostgreSQL to be ready (test)..."
+            docker logs fastapi-auth-postgres-dev || echo "Postgres container not running or no logs yet."
+            sleep 2
+          done
+          echo "PostgreSQL is ready (test)."
+
+      - name: Wait for Redis (test)
+        timeout-minutes: 1
+        run: |
+          until docker exec fastapi-auth-redis-dev redis-cli ping | grep -q PONG; do
+            echo "Waiting for Redis to be ready (test)..."
+            docker logs fastapi-auth-redis-dev || echo "Redis container not running or no logs yet."
+            sleep 2
+          done
+          echo "Redis is ready (test)."
+
+      - name: Wait for application container (fastapi-auth-app-dev) to be healthy for tests
+        timeout-minutes: 3 # Using same logic as lint job
+        run: |
+          echo "Waiting for application container (fastapi-auth-app-dev) to report healthy for tests..."
+          for i in $(seq 1 36); do
+            HEALTH_STATUS=$(docker inspect --format="{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}" fastapi-auth-app-dev 2>/dev/null || echo "error_inspecting")
+            if [ "$HEALTH_STATUS" = "healthy" ]; then echo "Application container is healthy for tests."; break; fi
+            if [ -z "$(docker inspect --format='{{.State.Health}}' fastapi-auth-app-dev 2>/dev/null)" ] && [ "$HEALTH_STATUS" = "running" ]; then echo "Application is running (no healthcheck). Assuming ready for tests."; sleep 5; break; fi
+            echo "Application not healthy/running for tests. Status: $HEALTH_STATUS. Attempt $i/36."
+            docker logs fastapi-auth-app-dev --tail 30 || echo "Could not retrieve app logs."
+            sleep 5
+          done
+          FINAL_HEALTH_STATUS=$(docker inspect --format="{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}" fastapi-auth-app-dev 2>/dev/null)
+          if ! ( [ "$FINAL_HEALTH_STATUS" = "healthy" ] || \
+                 ( [ -z "$(docker inspect --format='{{.State.Health}}' fastapi-auth-app-dev 2>/dev/null)" ] && [ "$FINAL_HEALTH_STATUS" = "running" ] )); then
+            echo "::error::Application container did not become healthy/running for tests. Final status: $FINAL_HEALTH_STATUS"; docker ps -a; exit 1;
+          fi
+          echo "Proceeding with tests."
+
+
+      - name: Run unit tests
+        run: docker exec fastapi-auth-app-dev pytest tests -v --cov=app --cov-report=xml --cov-report=html --cov-report=term
+
+      - name: Run integration tests
+        run: docker exec fastapi-auth-app-dev pytest tests/integration -v
+
+      - name: Run e2e tests
+        run: docker exec fastapi-auth-app-dev pytest tests/e2e -v
+
+      - name: Upload coverage reports
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./coverage.xml
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: false
+
+      - name: Upload coverage HTML report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: htmlcov/
+
+      - name: Cleanup (test)
+        if: always()
+        run: |
+          echo "=== Final container status (test) ==="
+          docker compose -f docker-compose.dev.yml ps
+          if [[ "${{ job.status }}" == "failure" ]]; then
+            echo "::group::Dumping logs from fastapi-auth-app-dev (test job)"
+            docker logs fastapi-auth-app-dev || echo "Could not retrieve app logs."
+            echo "::endgroup::"
+          fi
+          docker compose -f docker-compose.dev.yml down -v --remove-orphans
+
+  dependency-review:
+    runs-on: ubuntu-latest
+    name: Dependency Review
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dependency Review
+        uses: actions/dependency-review-action@v3
+        with:
+          fail-on-severity: high
+
+  notify-on-ci-failure:
+    name: Notify on CI Failure
+    runs-on: ubuntu-latest
+    if: failure() # Only run if any of the preceding jobs failed
+    needs: [lint-format-type, test, dependency-review] # Depends on all primary jobs
+    steps:
+      - name: Send CI Slack Notification on Failure
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_COLOR: 'danger' # Or red
+          SLACK_TITLE: 'CI Pipeline Failed :x:'
+          SLACK_MESSAGE: |
+            Workflow: `${{ github.workflow }}`
+            Branch: `${{ github.ref_name }}`
+            Commit: `${{ github.sha }}`
+            Actor: `${{ github.actor }}`
+            Trigger: `${{ github.event_name }}`
+            Run: <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Run>
