@@ -1,8 +1,9 @@
 # tests/test_main.py
+import os
+import sys
+
 import pytest
 from fastapi.testclient import TestClient
-import sys
-import os
 
 # Add app directory to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -83,13 +84,13 @@ def test_health_check_details():
     response = client.get("/health")
     assert response.status_code == 200
     data = response.json()
-    
+
     # Check required fields
     assert "status" in data
     assert "checks" in data
     assert "application" in data["checks"]
     assert "configuration" in data["checks"]
-    
+
     # Status should be healthy or degraded
     assert data["status"] in ["healthy", "degraded"]
 
@@ -100,16 +101,19 @@ def test_cors_headers():
     response = client.get("/")
     # CORS headers should be present on regular requests
     assert response.status_code == 200
-    
+
     # Test OPTIONS request with proper headers for CORS preflight
     headers = {
         "Origin": "http://localhost:3000",
         "Access-Control-Request-Method": "GET",
-        "Access-Control-Request-Headers": "Content-Type"
+        "Access-Control-Request-Headers": "Content-Type",
     }
     response = client.options("/health", headers=headers)
     # Should either return 200 with CORS headers or the endpoint should handle it
-    assert response.status_code in [200, 405]  # 405 is acceptable if OPTIONS not explicitly handled
+    assert response.status_code in [
+        200,
+        405,
+    ]  # 405 is acceptable if OPTIONS not explicitly handled
 
 
 def test_request_timing_header():
@@ -123,12 +127,12 @@ def test_request_timing_header():
 
 class TestErrorHandling:
     """Test error handling functionality"""
-    
+
     def test_404_error(self):
         """Test 404 error for non-existent endpoint"""
         response = client.get("/non-existent-endpoint")
         assert response.status_code == 404
-        
+
     def test_method_not_allowed(self):
         """Test method not allowed error"""
         response = client.post("/")  # POST to GET endpoint

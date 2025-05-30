@@ -3,16 +3,16 @@ sequenceDiagram
     participant FastAPI as FastAPI Service
     participant Auth0 as Auth0 Provider
     participant JWKS as Auth0 JWKS Endpoint
-    
+
     Note over User, JWKS: Initial Authentication Flow
-    
+
     User->>FastAPI: 1. Access Protected Resource
     FastAPI->>User: 2. 401 Unauthorized (No Token)
-    
+
     User->>Auth0: 3. Redirect to Auth0 Login
     Auth0->>User: 4. Present Login Form
     User->>Auth0: 5. Submit Credentials
-    
+
     alt Valid Credentials
         Auth0->>Auth0: 6. Validate User & Assign Roles
         Auth0->>User: 7. Return JWT Token with Roles
@@ -20,20 +20,20 @@ sequenceDiagram
     else Invalid Credentials
         Auth0->>User: Login Error
     end
-    
+
     Note over User, JWKS: API Request with Token
-    
+
     User->>FastAPI: 8. API Request with Bearer Token
     FastAPI->>JWKS: 9. Fetch Public Keys (if not cached)
     JWKS->>FastAPI: 10. Return JWKS Keys
-    
+
     FastAPI->>FastAPI: 11. Verify JWT Signature
     FastAPI->>FastAPI: 12. Validate Token Claims
-    
+
     alt Token Valid
         FastAPI->>FastAPI: 13. Extract User Info & Roles
         FastAPI->>FastAPI: 14. Check Role/Permission Requirements
-        
+
         alt Authorized
             FastAPI->>User: 15. Return Protected Resource
         else Insufficient Permissions
@@ -42,30 +42,30 @@ sequenceDiagram
     else Token Invalid/Expired
         FastAPI->>User: 401 Unauthorized
     end
-    
+
     Note over User, JWKS: Role-Based Access Examples
-    
+
     rect rgb(240, 248, 255)
         Note over User, FastAPI: Customer Role Flow
         User->>FastAPI: GET /customer/dashboard
         FastAPI->>FastAPI: Verify "customer" role
         FastAPI->>User: Customer Dashboard Data
     end
-    
+
     rect rgb(255, 240, 245)
         Note over User, FastAPI: Service Provider Role Flow
         User->>FastAPI: GET /provider/services
         FastAPI->>FastAPI: Verify "service_provider" role
         FastAPI->>User: Provider Services Data
     end
-    
+
     rect rgb(248, 255, 240)
         Note over User, FastAPI: Shared Access Flow
         User->>FastAPI: GET /shared/profile
         FastAPI->>FastAPI: Verify any valid role
         FastAPI->>User: Profile Data
     end
-    
+
     rect rgb(255, 248, 240)
         Note over User, FastAPI: Permission-Based Access
         User->>FastAPI: GET /admin/users
@@ -76,18 +76,18 @@ sequenceDiagram
             FastAPI->>User: 403 Forbidden
         end
     end
-    
+
     Note over User, JWKS: Token Refresh Flow
-    
+
     User->>FastAPI: Request with Expired Token
     FastAPI->>User: 401 Token Expired
     User->>Auth0: Refresh Token Request
     Auth0->>User: New JWT Token
     User->>FastAPI: Retry with New Token
     FastAPI->>User: Success Response
-    
+
     Note over User, JWKS: Logout Flow
-    
+
     User->>FastAPI: Logout Request
     FastAPI->>User: Clear Local Token
     User->>Auth0: Auth0 Logout

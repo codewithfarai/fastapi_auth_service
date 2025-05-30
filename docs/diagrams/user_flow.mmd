@@ -1,11 +1,11 @@
 graph TD
     %% User starts the flow
     Start([👤 User Opens Flutter App]) --> CheckToken{📱 Check Stored Token}
-    
+
     %% Token check branch
     CheckToken -->|Has Valid Token| GetUserInfo[📋 GET /auth/me]
     CheckToken -->|No Token/Invalid| Login[🔐 Show Login Screen]
-    
+
     %% Login flow
     Login --> Auth0Login[🔑 Redirect to Auth0]
     Auth0Login --> UserCreds[👤 User Enters Credentials]
@@ -15,85 +15,85 @@ graph TD
     Auth0Valid -->|Yes| ReceiveToken[🎫 Receive JWT Token]
     ReceiveToken --> StoreToken[💾 Store Token Securely]
     StoreToken --> GetUserInfo
-    
+
     %% Get user info from FastAPI
     GetUserInfo --> ValidateToken[🔍 FastAPI Validates JWT with Auth0]
     ValidateToken --> TokenValid{🎯 Token Valid?}
     TokenValid -->|No| ClearToken[🗑️ Clear Invalid Token]
     ClearToken --> Login
     TokenValid -->|Yes| ExtractRoles[👑 Extract User Roles from JWT]
-    
+
     %% Role-based routing
     ExtractRoles --> CheckRoles{🎭 User Roles?}
     CheckRoles -->|Customer Only| CustomerDash[👤 Customer Dashboard]
     CheckRoles -->|Provider Only| ProviderDash[🏢 Provider Dashboard]
     CheckRoles -->|Both Roles| RoleSelect[🔄 Role Selection Screen]
-    
+
     %% Role selection for multi-role users
     RoleSelect --> SelectCustomer{Choose Customer?}
     SelectCustomer -->|Yes| CustomerDash
     SelectCustomer -->|No| ProviderDash
-    
+
     %% Customer flow
     CustomerDash --> CustomerActions{🛍️ Customer Actions}
     CustomerActions --> BookService[📅 Book Service]
     CustomerActions --> ViewOrders[📋 View Orders]
     CustomerActions --> CustomerProfile[👤 Edit Profile]
-    
+
     %% Provider flow
     ProviderDash --> ProviderActions{🔧 Provider Actions}
     ProviderActions --> ManageServices[⚙️ Manage Services]
     ProviderActions --> ViewBookings[📊 View Bookings]
     ProviderActions --> ProviderProfile[🏢 Edit Profile]
-    
+
     %% API calls with token
     BookService --> APICall1[🌐 POST /customer/booking + JWT]
     ViewOrders --> APICall2[🌐 GET /customer/orders + JWT]
     ManageServices --> APICall3[🌐 GET /provider/services + JWT]
     ViewBookings --> APICall4[🌐 GET /provider/bookings + JWT]
-    
+
     %% API validation
     APICall1 --> FastAPICheck1[🔒 FastAPI Role Check]
     APICall2 --> FastAPICheck2[🔒 FastAPI Role Check]
     APICall3 --> FastAPICheck3[🔒 FastAPI Role Check]
     APICall4 --> FastAPICheck4[🔒 FastAPI Role Check]
-    
+
     %% Access control results
     FastAPICheck1 --> AccessCheck1{🚫 Has Customer Role?}
     FastAPICheck2 --> AccessCheck2{🚫 Has Customer Role?}
     FastAPICheck3 --> AccessCheck3{🚫 Has Provider Role?}
     FastAPICheck4 --> AccessCheck4{🚫 Has Provider Role?}
-    
+
     %% Success responses
     AccessCheck1 -->|✅ Yes| BookingSuccess[✅ Booking Created]
     AccessCheck2 -->|✅ Yes| OrdersData[📊 Orders Data]
     AccessCheck3 -->|✅ Yes| ServicesData[⚙️ Services Data]
     AccessCheck4 -->|✅ Yes| BookingsData[📅 Bookings Data]
-    
+
     %% Access denied
     AccessCheck1 -->|❌ No| AccessDenied1[🚫 403 Forbidden]
     AccessCheck2 -->|❌ No| AccessDenied2[🚫 403 Forbidden]
     AccessCheck3 -->|❌ No| AccessDenied3[🚫 403 Forbidden]
     AccessCheck4 -->|❌ No| AccessDenied4[🚫 403 Forbidden]
-    
+
     %% Update UI
     BookingSuccess --> UpdateUI1[🔄 Update Flutter UI]
     OrdersData --> UpdateUI2[🔄 Update Flutter UI]
     ServicesData --> UpdateUI3[🔄 Update Flutter UI]
     BookingsData --> UpdateUI4[🔄 Update Flutter UI]
-    
+
     %% Error handling
     AccessDenied1 --> ShowError1[❌ Show Access Denied]
     AccessDenied2 --> ShowError2[❌ Show Access Denied]
     AccessDenied3 --> ShowError3[❌ Show Access Denied]
     AccessDenied4 --> ShowError4[❌ Show Access Denied]
-    
+
     %% Token refresh flow
     UpdateUI1 --> TokenExpired{⏰ Token Expired?}
     UpdateUI2 --> TokenExpired
     UpdateUI3 --> TokenExpired
     UpdateUI4 --> TokenExpired
-    
+
     TokenExpired -->|No| ContinueUsing[✅ Continue Using App]
     TokenExpired -->|Yes| RefreshToken[🔄 Refresh Token with Auth0]
     RefreshToken --> RefreshSuccess{✅ Refresh Success?}
@@ -101,7 +101,7 @@ graph TD
     RefreshSuccess -->|No| ForceRelogin[🔐 Force Re-login]
     UpdateStoredToken --> ContinueUsing
     ForceRelogin --> Login
-    
+
     %% Logout flow
     ContinueUsing --> LogoutCheck{🚪 User Logout?}
     LogoutCheck -->|No| ContinueUsing
@@ -109,7 +109,7 @@ graph TD
     ClearAllTokens --> Auth0Logout[🔐 Logout from Auth0]
     Auth0Logout --> BackToStart[🔄 Back to Start]
     BackToStart --> Start
-    
+
     %% Styling
     classDef startEnd fill:#e8f5e8,stroke:#2e7d32,stroke-width:3px
     classDef authProcess fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
@@ -118,7 +118,7 @@ graph TD
     classDef errorProcess fill:#ffebee,stroke:#c62828,stroke-width:2px
     classDef successProcess fill:#e1f5fe,stroke:#0288d1,stroke-width:2px
     classDef decisionProcess fill:#fafafa,stroke:#424242,stroke-width:2px
-    
+
     %% Apply styles
     class Start,BackToStart startEnd
     class Login,Auth0Login,UserCreds,ReceiveToken,StoreToken,GetUserInfo,ValidateToken authProcess
