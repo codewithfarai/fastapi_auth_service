@@ -45,7 +45,6 @@ fastapi-auth-service/
 │   │   │   ├── __init__.py
 │   │   │   ├── jwt_handler.py      # JWT token verification
 │   │   │   ├── auth0_client.py     # Auth0 integration
-│   │   │   ├── okta_client.py      # Okta integration (alternative)
 │   │   │   └── permissions.py      # Permission checking logic
 │   │   │
 │   │   ├── security/
@@ -175,7 +174,6 @@ fastapi-auth-service/
 │   │
 │   ├── auth-setup/
 │   │   ├── auth0-configuration.md  # Auth0 setup guide
-│   │   ├── okta-configuration.md   # Okta setup guide
 │   │   └── screenshots/            # Setup screenshots
 │   │
 │   ├── api-examples/
