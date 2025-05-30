@@ -6,6 +6,7 @@ A production-ready authentication service with Auth0 integration, role-based acc
 
 - [Installation](#installation)
 - [Development Setup](#development-setup)
+- [Docker Setup](#docker-setup)
 - [VS Code Configuration](#vs-code-configuration)
 - [Pre-commit Hooks](#pre-commit-hooks)
 - [Running the Application](#running-the-application)
@@ -35,6 +36,72 @@ This project uses Poetry for dependency management and includes comprehensive de
 - Python 3.12+
 - Poetry
 - VS Code (recommended)
+- Docker & Docker Compose (for containerized development)
+
+## Docker Setup
+
+The project includes comprehensive Docker support for both development and production environments.
+
+### 🚀 **Quick Start with Docker**
+
+```bash
+# Create environment file
+make env-example
+cp .env.example .env
+
+# Start development environment
+make dev
+
+# Or for production
+make prod
+```
+
+### 🐳 **Docker Features**
+
+- **Multi-stage Dockerfile**: Optimized builds for development and production
+- **Docker Compose configurations**: Separate configs for dev and production
+- **PostgreSQL 16**: Database with persistent storage
+- **Redis 7**: Caching layer with optional authentication
+- **Development tools**: pgAdmin, Redis Commander, MailHog
+- **Health checks**: All services include proper health monitoring
+- **Hot reload**: Code changes reflect immediately in development
+
+### 📦 **Available Services**
+
+#### Development Environment
+- **FastAPI app**: http://localhost:8000
+- **API docs**: http://localhost:8000/docs
+- **pgAdmin**: http://localhost:5050 (dev@example.com / dev_password)
+- **Redis Commander**: http://localhost:8081
+- **MailHog**: http://localhost:8025
+
+### 🛠️ **Docker Commands**
+
+```bash
+# Development commands
+make build-dev      # Build development images
+make up-dev         # Start development containers
+make down-dev       # Stop development containers
+make logs-dev       # View development logs
+make shell-dev      # Access app container shell
+make test-dev       # Run tests in container
+
+# Production commands
+make build          # Build production images
+make up             # Start production containers
+make down           # Stop production containers
+make health         # Check services health
+
+# Database commands
+make db-shell-dev   # Access PostgreSQL shell
+make migrate-dev    # Run database migrations
+
+# Cleanup
+make clean          # Clean up containers and volumes
+make clean-all      # Deep clean including images
+```
+
+For detailed Docker documentation, see [docs/docker-setup.md](docs/docker-setup.md).
 
 ## VS Code Configuration
 
