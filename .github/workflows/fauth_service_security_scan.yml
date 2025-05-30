@@ -1,0 +1,83 @@
+name: Security Scan
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+    types: [ opened, synchronize, reopened ]
+  schedule:
+    - cron: '0 0 * * 0' # Sunday at midnight UTC
+
+jobs:
+  codeql-analysis:
+    name: CodeQL Analysis
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write # Required to upload SARIF results
+      actions: read # Required for private repos to allow actions to read other actions
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: python
+          # Add other languages if present, e.g., javascript, typescript
+          # queries: +security-extended # Example: run more queries, remove if not needed
+
+      - name: Autobuild
+        # For Python, Autobuild usually works well. If you have a complex build process,
+        # you might need to replace this with custom build steps.
+        uses: github/codeql-action/autobuild@v3
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+
+  snyk-scan:
+    name: Snyk Vulnerability Scan
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write # Required to upload SARIF results
+      contents: read # Required to checkout code
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12' # Match project's Python version
+
+      - name: Install Poetry
+        run: pipx install poetry
+
+      - name: Install dependencies
+        # --no-dev might be considered if you only want to scan production dependencies
+        # However, for a comprehensive scan, including dev dependencies can be useful
+        # to catch issues in your development toolchain.
+        # --no-root is generally good for library projects, for applications it might not be strictly necessary
+        # but doesn't harm.
+        run: poetry install --no-interaction --no-root --sync
+
+      - name: Run Snyk Scan
+        # This uses Snyk's official GitHub Action for Python.
+        # It should automatically pick up the installed Python and Poetry environment.
+        uses: snyk/actions/python@master
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          command: test # 'test' fails the build on vulnerabilities based on threshold
+          args: --all-projects --sarif-file-output=snyk.sarif --severity-threshold=high # Fail on high or critical
+          # To include medium severity: --severity-threshold=medium
+          # To monitor without failing (sends results to Snyk dashboard):
+          # command: monitor
+          # args: --all-projects
+
+      - name: Upload Snyk SARIF to GitHub Security Tab
+        if: always() # 'always()' ensures this step runs even if the Snyk scan fails the build
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: snyk.sarif
+          category: snyk # Optional: category for the results in GitHub Security tab

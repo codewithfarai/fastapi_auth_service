@@ -1,0 +1,46 @@
+version: 2
+updates:
+  # Python dependencies managed by Poetry
+  # For Poetry, Dependabot uses the "pip" ecosystem and looks for pyproject.toml and poetry.lock.
+  - package-ecosystem: "pip"
+    directory: "/" # Root directory where pyproject.toml and poetry.lock are located
+    schedule:
+      interval: "daily"
+    open-pull-requests-limit: 10 # Limit the number of open PRs for pip updates
+    commit-message:
+      prefix: "chore(deps)" # Conventional commit prefix for dependency updates
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "python"
+      - "dependabot"
+
+  # Dockerfile base image updates
+  - package-ecosystem: "docker"
+    directory: "/" # Root directory where Dockerfile is located (adjust if it's elsewhere, e.g., "/docker")
+    schedule:
+      interval: "daily"
+    open-pull-requests-limit: 5 # Limit the number of open PRs for Docker updates
+    commit-message:
+      prefix: "chore(deps)" # Conventional commit prefix
+      prefix-development: "chore(deps-dev)" # Optional: if you want a different prefix for dev Dockerfiles
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "docker"
+      - "dependabot"
+
+  # GitHub Actions updates
+  # Keeps your workflow actions up-to-date.
+  - package-ecosystem: "github-actions"
+    directory: "/" # Root directory where .github/workflows is located
+    schedule:
+      interval: "weekly" # Actions generally don't need daily checks
+    open-pull-requests-limit: 5 # Limit the number of open PRs for Actions updates
+    commit-message:
+      prefix: "chore(actions)" # Conventional commit prefix for GHA updates
+      include: "scope"
+    labels:
+      - "actions"
+      - "dependencies"
+      - "dependabot"
