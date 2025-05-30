@@ -1,7 +1,7 @@
 # Multi-stage Dockerfile for FastAPI Authentication Service
 
 # Stage 1: Base Python image with system dependencies
-FROM python:3.12-slim as python-base
+FROM python:3.12-slim AS python-base
 
 # Environment variables
 ENV PYTHONUNBUFFERED=1 \
@@ -29,7 +29,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 # Stage 2: Poetry installation
-FROM python-base as poetry-base
+FROM python-base AS poetry-base
 
 # Install Poetry
 RUN curl -sSL https://install.python-poetry.org | python3 -
@@ -39,7 +39,7 @@ WORKDIR $PYSETUP_PATH
 COPY poetry.lock pyproject.toml ./
 
 # Stage 3: Development dependencies
-FROM poetry-base as development
+FROM poetry-base AS development
 
 # Install all dependencies including dev
 RUN poetry install --no-root
@@ -58,13 +58,13 @@ EXPOSE 8000
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
 
 # Stage 4: Production dependencies only
-FROM poetry-base as production-deps
+FROM poetry-base AS production-deps
 
 # Install only production dependencies
 RUN poetry install --no-root --no-dev
 
 # Stage 5: Production runtime
-FROM python-base as production
+FROM python-base AS production
 
 # Install curl for health checks
 RUN apt-get update \
