@@ -10,9 +10,9 @@ on:
 env:
   PYTHON_VERSION: '3.12'
   POETRY_VERSION: '1.7.1'
-  POSTGRES_DB: testdb
-  POSTGRES_USER: testuser
-  POSTGRES_PASSWORD: testpass
+  POSTGRES_DB: auth_db
+  POSTGRES_USER: auth_user
+  POSTGRES_PASSWORD: auth_password
   REDIS_HOST: localhost
   REDIS_PORT: 6379
 
@@ -31,12 +31,36 @@ jobs:
           docker compose -f docker-compose.dev.yml build
           docker compose -f docker-compose.dev.yml up -d
 
-      - name: Wait for services to be ready
+      - name: Debug - Show running containers
         run: |
-          # Wait for PostgreSQL
-          timeout 30s bash -c 'until docker exec fastapi-auth-postgres-dev pg_isready; do sleep 1; done'
-          # Wait for Redis
-          timeout 30s bash -c 'until docker exec fastapi-auth-redis-dev redis-cli ping; do sleep 1; done'
+          echo "=== Docker Compose PS ==="
+          docker compose -f docker-compose.dev.yml ps
+          echo "=== Docker PS ==="
+          docker ps -a
+          echo "=== PostgreSQL Logs ==="
+          docker logs fastapi-auth-postgres-dev
+          echo "=== Redis Logs ==="
+          docker logs fastapi-auth-redis-dev
+          echo "=== App Logs ==="
+          docker logs fastapi-auth-app-dev
+
+      - name: Wait for PostgreSQL
+        timeout-minutes: 1
+        run: |
+          until docker exec fastapi-auth-postgres-dev pg_isready -U auth_user -d auth_db; do
+            echo "Waiting for PostgreSQL to be ready..."
+            docker logs fastapi-auth-postgres-dev
+            sleep 2
+          done
+
+      - name: Wait for Redis
+        timeout-minutes: 1
+        run: |
+          until docker exec fastapi-auth-redis-dev redis-cli ping; do
+            echo "Waiting for Redis to be ready..."
+            docker logs fastapi-auth-redis-dev
+            sleep 2
+          done
 
       - name: Run unit tests
         run: docker exec fastapi-auth-app-dev pytest tests -v --cov=app --cov-report=xml --cov-report=html --cov-report=term
@@ -63,9 +87,10 @@ jobs:
 
       - name: Cleanup
         if: always()
-        run: docker compose -f docker-compose.dev.yml down -v
-
-
+        run: |
+          echo "=== Final container status ==="
+          docker compose -f docker-compose.dev.yml ps
+          docker compose -f docker-compose.dev.yml down -v
 
   dependency-review:
     runs-on: ubuntu-latest
